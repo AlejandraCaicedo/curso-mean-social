@@ -1,0 +1,19 @@
+{
+  "name": "curso-mean-social",
+  "version": "1.0.0",
+  "description": "curso mean stack para desarrollar un red social con angular y nodejs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AlejandraCaicedo/curso-mean-social.git"
+  },
+  "author": "macch",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/AlejandraCaicedo/curso-mean-social/issues"
+  },
+  "homepage": "https://github.com/AlejandraCaicedo/curso-mean-social#readme"
+}
