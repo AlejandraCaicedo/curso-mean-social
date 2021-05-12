@@ -37,11 +37,11 @@ function saveUser(req, res) {
         // restricción de usuarios duplicados
         User.find({
             $or: [{
-                    email: user.email.toLowerCase()
-                },
-                {
-                    nick: user.nick.toLowerCase()
-                }
+                email: user.email.toLowerCase()
+            },
+            {
+                nick: user.nick.toLowerCase()
+            }
             ]
         }).exec((err, users) => {
 
@@ -156,16 +156,16 @@ function getUser(req, res) {
                     message: "Error al comprobar el seguimiento"
                 })
 
-                console.log(user)
-                console.log(follow)
-
-                return res.status(200)
+                return res.status(200).send({
+                    user,
+                    follow
+                })
             }
         )
 
-        return res.status(200).send({
-            user
-        })
+        // return res.status(200).send({
+        //     user
+        // })
     })
 }
 

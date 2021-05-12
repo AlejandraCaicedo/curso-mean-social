@@ -53,6 +53,7 @@ function deleteFollow(req, res) {
     })
 }
 
+// Listar usuarios que yo sigo
 function getFollowingUsers(req, res) {
     var userID = req.user.sub
 
@@ -93,6 +94,7 @@ function getFollowingUsers(req, res) {
     })
 }
 
+// Listar usuarios que me siguen 
 function getFollowedUsers(req, res) {
     var userID = req.user.sub
 
