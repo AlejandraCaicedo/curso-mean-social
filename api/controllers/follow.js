@@ -135,7 +135,7 @@ function getFollowedUsers(req, res) {
     })
 }
 
-// devolver usuarios sin paginación
+// devolver usuarios que me siguen sin paginación
 function getFollows(req, res) {
     var userID = req.user.sub
 

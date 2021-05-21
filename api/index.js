@@ -6,7 +6,7 @@ var port = 3800
 
 // Conexion DB
 mongoose.Promise = global.Promise
-mongoose.connect('mongodb://localhost:27017/curso_mean_social', { useMongoClient: true })
+mongoose.connect('mongodb://localhost:27017/curso_mean_social', { useNewUrlParser: true })
     .then(() => {
         console.log("La conexión es exitosa ")
 

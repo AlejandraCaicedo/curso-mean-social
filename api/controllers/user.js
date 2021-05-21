@@ -8,17 +8,11 @@ var path = require('path')
 var User = require('../models/user')
 var Follow = require('../models/follow')
 var jwt = require('../services/jwt')
+const follow = require('../models/follow')
 
 function home(req, res) {
     res.status(200).send({
         message: 'metodo home'
-    })
-}
-
-function pruebas(req, res) {
-    console.log(req.body)
-    res.status(200).send({
-        message: 'metodo pruebas'
     })
 }
 
@@ -135,6 +129,7 @@ function loginUser(req, res) {
 
 // obtener datos de un usuario
 function getUser(req, res) {
+    // usuario de la url
     var userID = req.params.id
 
     User.findById(userID, (err, user) => {
@@ -146,32 +141,51 @@ function getUser(req, res) {
             message: 'El usuario no está registrado'
         })
 
-        // el usuario identificado sigue al usuario que llega en la url
-        Follow.findOne({
-            user: req.user.sub,
-            followed: userID
-        }).exec(
-            (err, follow) => {
-                if (err) return res.status(500).send({
-                    message: "Error al comprobar el seguimiento"
-                })
-
-                return res.status(200).send({
-                    user,
-                    follow
-                })
-            }
-        )
-
-        // return res.status(200).send({
-        //     user
-        // })
+        followThisUser(req.user.sub, userID).then((value) => {
+            user.password = undefined
+            return res.status(200).send({
+                user,
+                following: value.following,
+                followed: value.followed
+            })
+        })
     })
+}
+
+// asincrona para saber si un usuario sigue a otro
+async function followThisUser(identity_user_id, userID) {
+
+    // sincrona sigo a ese usuario
+    // el usuario identificado sigue al usuario que llega en la url
+    var following = await Follow.findOne({
+        user: identity_user_id,
+        followed: userID
+    }).exec().then((follow) => {
+        return follow
+    }).catch((err) => {
+        return handleError(err)
+    })
+
+    // sincrona usuario seguido me sigue
+    var followed = await Follow.findOne({
+        user: userID,
+        followed: identity_user_id
+    }).exec().then((follow) => {
+        return follow
+    }).catch((err) => {
+        return handleError(err)
+    })
+
+    return {
+        following: following,
+        followed: followed
+    }
 }
 
 // obtener listado de usuarios paginados
 function getUsers(req, res) {
 
+    //usuario identificado
     var identity_user_id = req.user.sub
     var page = 1
 
@@ -191,15 +205,57 @@ function getUsers(req, res) {
             message: 'No se encontraron usuarios disponibles'
         })
 
-        // total (total de documentos encontrados)
-
-        return res.status(200).send({
-            users,
-            total,
-            pages: Math.ceil(total / itemPerPage)
+        followUsersIDs(identity_user_id).then((value) => {
+            // total (total de documentos encontrados)
+            return res.status(200).send({
+                users,
+                // usuarios que sigue
+                usersFollowing: value.following,
+                // usuarios que lo siguen
+                usersFollowed: value.followed,
+                total,
+                pages: Math.ceil(total / itemPerPage)
+            })
         })
     })
+}
 
+// asincrona para saber si un usuario sigue a otro (usuarios paginados)
+async function followUsersIDs(userID) {
+    // array de usuarios que sigue el usuario autenticado
+    var following = await Follow.find({
+        user: userID
+    }).select({ '_id': 0, '__v': 0, 'user': 0 }).exec().then((follows) => {
+        return follows
+    }).catch((err) => {
+        return handleError(err)
+    })
+
+    // proceso followind IDs
+    var followingClean = []
+    following.forEach((follow) => {
+        followingClean.push(follow.followed)
+    })
+
+    // array de usuarios que siguen al usuario autenticado
+    var followed = await Follow.find({
+        followed: userID
+    }).select({ '_id': 0, '__v': 0, 'followed': 0 }).exec().then((follows) => {
+        return follows
+    }).catch((err) => {
+        return handleError(err)
+    })
+
+    // proceso followed IDs
+    var followedClean = []
+    followed.forEach((follow) => {
+        followedClean.push(follow.user)
+    })
+
+    return {
+        following: followingClean,
+        followed: followedClean
+    }
 }
 
 // actualizar datos de usuario
@@ -315,7 +371,6 @@ function removeFilesOfUploads(res, file_path, message) {
 
 module.exports = {
     home,
-    pruebas,
     saveUser,
     loginUser,
     getUser,
