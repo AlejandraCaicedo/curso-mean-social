@@ -213,7 +213,7 @@ function updateUser(req, res) {
 	// eliminar propiedad password del update
 	delete update.password;
 
-	if (userID != req.user.sub) {
+	if (userID !== req.user.sub) {
 		return res.status(500).send({
 			message: 'No existen permisos para actualizar los datos del usuario',
 		});
@@ -280,7 +280,7 @@ function uploadImage(req, res) {
 		var file_ext = ext_split[1];
 		console.log('file ext: ', file_ext);
 
-		if (userID != req.user.sub) {
+		if (userID !== req.user.sub) {
 			return removeFilesOfUploads(
 				res,
 				file_path,
@@ -289,10 +289,10 @@ function uploadImage(req, res) {
 		}
 
 		if (
-			file_ext == 'png' ||
-			file_ext == 'jpg' ||
-			file_ext == 'jpeg' ||
-			file_ext == 'gif'
+			file_ext === 'png' ||
+			file_ext === 'jpg' ||
+			file_ext === 'jpeg' ||
+			file_ext === 'gif'
 		) {
 			// actualizar usuario en la base de datos
 
