@@ -4,7 +4,11 @@
   "description": "curso mean stack para desarrollar un red social con angular y nodejs",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon index.js",
+    "start": "nodemon ./src/index.js",
+    "lint": "eslint ./src",
+    "lint:fix": "eslint ./src --fix",
+    "format": "prettier --config .prettierrc.json ./src/**/*.js --write",
+    "lint:all": "npm run lint:fix && npm run format",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -29,6 +33,8 @@
     "path": "^0.12.7"
   },
   "devDependencies": {
-    "nodemon": "^2.0.7"
+    "eslint": "^8.31.0",
+    "nodemon": "^2.0.20",
+    "prettier": "^2.8.2"
   }
 }
