@@ -10,12 +10,6 @@ var User = require('../models/user');
 var Follow = require('../models/follow');
 const { publicDecrypt } = require('crypto');
 
-function prrueba(req, res) {
-	res.status(200).send({
-		message: 'Hola desde controlador de publication',
-	});
-}
-
 function savePublication(req, res) {
 	let params = req.body;
 
@@ -46,7 +40,55 @@ function savePublication(req, res) {
 	});
 }
 
+function getPublications(req, res) {
+	let page = 1;
+	let userId = req.user.sub;
+
+	if (req.params.page) {
+		page = req.params.page;
+	}
+
+	let itemsPerPage = 4;
+
+	Follow.find({ user: userId })
+		.populate({ path: 'followed' })
+		.exec((err, follows) => {
+			if (err)
+				return res.status(500).send({
+					message: 'Error getting followed.',
+				});
+
+			let followsClean = [];
+
+			follows.forEach((follow) => {
+				followsClean.push(follow.followed);
+			});
+
+			Publication.find({ user: { $in: followsClean } })
+				.sort('-created_at')
+				.populate('user')
+				.paginate(page, itemsPerPage, (err, publications, total) => {
+					if (err)
+						return res.status(500).send({
+							message: 'Error returning publications.',
+						});
+
+					if (!publications)
+						return res.status(404).send({
+							message: 'There are no publications.',
+						});
+
+					return res.status(200).send({
+						total_items: total,
+						page,
+						pages: Math.ceil(total / itemsPerPage),
+						publications,
+					});
+				});
+		});
+}
+
 module.exports = {
-	prrueba,
 	savePublication,
+	getPublications,
 };
