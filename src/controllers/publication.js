@@ -87,8 +87,33 @@ function getPublications(req, res) {
 				});
 		});
 }
+/**
+ * Returning a publication giving the ID
+ * @param {*} req
+ * @param {*} res
+ */
+function getPublication(req, res) {
+	const publication = req.params.id;
+
+	Publication.findById(publication, (err, publication) => {
+		if (err)
+			return res.status(500).send({
+				message: 'Error returning publication.',
+			});
+
+		if (!publication)
+			return res.status(404).send({
+				message: 'The publication does not exist.',
+			});
+
+		return res.status(200).send({
+			publication,
+		});
+	});
+}
 
 module.exports = {
 	savePublication,
 	getPublications,
+	getPublication,
 };

@@ -21,4 +21,10 @@ api.get(
 	PublicationController.getPublications,
 );
 
+api.get(
+	'/publication/:id',
+	md_auth.ensureAuth,
+	PublicationController.getPublication,
+);
+
 module.exports = api;
