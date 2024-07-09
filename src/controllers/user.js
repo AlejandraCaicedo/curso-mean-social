@@ -5,12 +5,12 @@ var mongoosePaginate = require('mongoose-pagination');
 var fs = require('fs');
 var path = require('path');
 
-var User = require('../models/user');
-var Follow = require('../models/follow');
+const User = require('../models/user');
+const Follow = require('../models/follow');
+const Publication = require('../models/publication');
 
-var jwt = require('../services/jwt');
-const follow = require('../models/follow');
-const { count } = require('../models/user');
+const jwt = require('../services/jwt');
+const { removeFilesOfUploads } = require('../services/imageUploadService');
 
 function home(req, res) {
 	res.status(200).send({
@@ -262,94 +262,56 @@ function getCounters(req, res) {
 
 // subir imagen avatar usuario
 function uploadImage(req, res) {
-	var userID = req.params.id;
+	const userID = req.params.id;
 
-	if (req.files) {
-		var file_path = req.files.image.path;
-		console.log('file path: ', file_path);
-
-		var file_split = file_path.split('/');
-		console.log('file split: ', file_split);
-
-		var file_name = file_split[2];
-		console.log('file name: ', file_name);
-
-		var ext_split = file_name.split('.');
-		console.log('ext: ', ext_split);
-
-		var file_ext = ext_split[1];
-		console.log('file ext: ', file_ext);
-
-		if (userID !== req.user.sub) {
-			return removeFilesOfUploads(
-				res,
-				file_path,
-				'No existen permisos para actualizar los datos del usuario',
-			);
-		}
-
-		if (
-			file_ext === 'png' ||
-			file_ext === 'jpg' ||
-			file_ext === 'jpeg' ||
-			file_ext === 'gif'
-		) {
-			// actualizar usuario en la base de datos
-
-			User.findByIdAndUpdate(
-				userID,
-				{
-					image: file_name,
-				},
-				{
-					new: true,
-				},
-				(err, userUpdate) => {
-					if (err)
-						return res.status(500).send({
-							message: 'Error en la petición',
-						});
-
-					if (!userUpdate)
-						return res.status(404).send({
-							message: 'No se ha podido actualizar la imagen del usuario',
-						});
-
-					return res.status(200).send({
-						user: userUpdate,
-					});
-				},
-			);
-		} else {
-			return removeFilesOfUploads(res, file_path, 'Extensión no válida');
-		}
-	} else {
-		return res.status(200).send({
-			message: 'No se subió ningun archivo',
-		});
+	if (!req.files || !req.files.image) {
+		return res.status(400).send({ message: 'No file was uploaded.' });
 	}
+
+	const { path: filePath } = req.files.image;
+	const fileName = path.basename(filePath);
+	const fileExt = path.extname(fileName).slice(1).toLowerCase();
+
+	if (userID !== req.user.sub) {
+		return removeFilesOfUploads(res, filePath, 'No permission to update data.');
+	}
+
+	const validExtensions = ['png', 'jpg', 'jpeg', 'gif'];
+	if (!validExtensions.includes(fileExt)) {
+		return removeFilesOfUploads(res, filePath, 'Invalid extension.');
+	}
+
+	// Actualizar usuario en la base de datos
+	User.findByIdAndUpdate(
+		userID,
+		{ image: fileName },
+		{ new: true },
+		(err, userUpdated) => {
+			if (err) {
+				return res.status(500).send({ message: 'Error in the request.' });
+			}
+
+			if (!userUpdated) {
+				return res.status(404).send({ message: 'Could not upload the image.' });
+			}
+
+			return res.status(200).send({ user: userUpdated });
+		},
+	);
 }
 
 function getImageFile(req, res) {
-	var image_File = req.params.imageFile;
-	var path_file = './uploads/users/' + image_File;
+	const imageFile = req.params.imageFile;
+	const pathFile = path.join(__dirname, 'uploads', 'users', imageFile);
 
-	fs.exists(path_file, (exists) => {
-		if (exists) {
-			res.sendFile(path.resolve(path_file));
+	fs.access(pathFile, fs.constants.F_OK, (err) => {
+		if (!err) {
+			res.sendFile(path.resolve(pathFile));
 		} else {
-			res.status(200).send({
-				message: 'No existe la imagen buscada',
+			res.status(404).send({
+				message: 'There is no wanted image.',
 			});
 		}
-	});
-}
-
-function removeFilesOfUploads(res, file_path, message) {
-	fs.unlink(file_path, (err) => {
-		return res.status(200).send({
-			message: message,
-		});
 	});
 }
 
@@ -390,32 +352,21 @@ async function followThisUser(identity_user_id, userID) {
 
 // asincrona para contar cuantos seguidos y seguidores tiene un usuario
 async function getCountFollow(userID) {
-	var following = await Follow.count({
-		user: userID,
-	})
-		.exec()
-		.then((count) => {
-			return count;
-		})
-		.catch((err) => {
-			return handleError(err);
-		});
+	try {
+		const [following, followed, publications] = await Promise.all([
+			Follow.count({ user: userID }).exec(),
+			Follow.count({ followed: userID }).exec(),
+			Publication.count({ user: userID }).exec(),
+		]);
 
-	var followed = await Follow.count({
-		followed: userID,
-	})
-		.exec()
-		.then((count) => {
-			return count;
-		})
-		.catch((err) => {
-			return handleError(err);
-		});
-
-	return {
-		following: following,
-		followed: followed,
-	};
+		return {
+			following,
+			followed,
+			publications,
+		};
+	} catch (err) {
+		handleError(err);
+	}
 }
 
 // asincrona para saber si un usuario sigue a otro (usuarios paginados)
@@ -474,5 +425,4 @@ module.exports = {
 	getCounters,
 	uploadImage,
 	getImageFile,
-	removeFilesOfUploads,
 };

@@ -33,4 +33,16 @@ api.delete(
 	PublicationController.deletePublication,
 );
 
+api.post(
+	'/upload-image-post/:id',
+	[md_auth.ensureAuth, md_upload],
+	PublicationController.uploadPublicationImage,
+);
+
+api.get(
+	'/get-image-post/:imageFile',
+	md_auth.ensureAuth,
+	PublicationController.getImageFile,
+);
+
 module.exports = api;

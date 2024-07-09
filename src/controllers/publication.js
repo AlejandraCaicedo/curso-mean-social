@@ -4,11 +4,14 @@ var path = require('path');
 var fs = require('fs');
 var moment = require('moment');
 var mongoosePaginate = require('mongoose-pagination');
-
-var Publication = require('../models/publication');
-var User = require('../models/user');
-var Follow = require('../models/follow');
 const { publicDecrypt } = require('crypto');
+
+const Publication = require('../models/publication');
+const User = require('../models/user');
+const Follow = require('../models/follow');
+
+const { removeFilesOfUploads } = require('../services/imageUploadService');
+const publication = require('../models/publication');
 
 function savePublication(req, res) {
 	let params = req.body;
@@ -146,9 +149,80 @@ function deletePublication(req, res) {
 	);
 }
 
+function uploadPublicationImage(req, res) {
+	const publicationID = req.params.id;
+	const user = req.user.sub;
+
+	if (!req.files || !req.files.image) {
+		return res.status(400).send({ message: 'No file was uploaded.' });
+	}
+
+	const { path: filePath } = req.files.image;
+	const fileName = path.basename(filePath);
+	const fileExt = path.extname(fileName).slice(1).toLowerCase();
+
+	const validExtensions = ['png', 'jpg', 'jpeg', 'gif'];
+	if (!validExtensions.includes(fileExt)) {
+		return removeFilesOfUploads(res, filePath, 'Invalid extension.');
+	}
+
+	Publication.findOne({ user, _id: publicationID }, (err, publication) => {
+		if (err) {
+			return res
+				.status(500)
+				.send({ message: 'Error while uploading the file.' });
+		}
+
+		if (!publication) {
+			return removeFilesOfUploads(
+				res,
+				filePath,
+				'No permission to update data.',
+			);
+		}
+
+		// Actualizar publicación en la base de datos
+		Publication.findByIdAndUpdate(
+			publicationID,
+			{ file: fileName },
+			{ new: true },
+			(err, publicationUpdated) => {
+				if (err) {
+					return res.status(500).send({ message: 'Error in the request.' });
+				}
+
+				if (!publicationUpdated) {
+					return res
+						.status(404)
+						.send({ message: 'Could not upload the image.' });
+				}
+
+				return res.status(200).send({ publication: publicationUpdated });
+			},
+		);
+	});
+}
+
+function getImageFile(req, res) {
+	const imageFile = req.params.imageFile;
+	const pathFile = path.join(__dirname, 'uploads', 'publications', imageFile);
+
+	fs.access(pathFile, fs.constants.F_OK, (err) => {
+		if (!err) {
+			res.sendFile(path.resolve(pathFile));
+		} else {
+			res.status(404).send({
+				message: 'There is no wanted image.',
+			});
+		}
+	});
+}
+
 module.exports = {
 	savePublication,
 	getPublications,
 	getPublication,
 	deletePublication,
+	uploadPublicationImage,
+	getImageFile,
 };
