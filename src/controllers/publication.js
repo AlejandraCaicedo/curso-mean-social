@@ -40,6 +40,11 @@ function savePublication(req, res) {
 	});
 }
 
+/**
+ * Returning publications from users followed
+ * @param {*} req
+ * @param {*} res
+ */
 function getPublications(req, res) {
 	let page = 1;
 	let userId = req.user.sub;
@@ -112,8 +117,38 @@ function getPublication(req, res) {
 	});
 }
 
+/**
+ * Deleting a publication
+ * @param {*} req
+ * @param {*} res
+ */
+function deletePublication(req, res) {
+	const publication = req.params.id;
+	const user = req.user.sub;
+
+	Publication.findOneAndRemove(
+		{ user: user, _id: publication },
+		(err, publicationRemoved) => {
+			if (err)
+				return res.status(500).send({
+					message: 'Error deleting publication.',
+				});
+
+			if (!publicationRemoved)
+				return res.status(404).send({
+					message: 'The publication could not be deleted.',
+				});
+
+			return res.status(200).send({
+				publication: publicationRemoved,
+			});
+		},
+	);
+}
+
 module.exports = {
 	savePublication,
 	getPublications,
 	getPublication,
+	deletePublication,
 };
