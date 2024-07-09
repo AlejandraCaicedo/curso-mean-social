@@ -9,6 +9,7 @@ var app = express();
 
 var user_routes = require('./routers/user');
 var follow_routes = require('./routers/follow');
+var publication_routes = require('./routers/publication');
 
 // CARGAR MIDDLEWARES
 
@@ -25,6 +26,7 @@ app.use(bodyParser.json());
 
 app.use('/api', user_routes);
 app.use('/api', follow_routes);
+app.use('/api', publication_routes);
 
 // EXPORTAR LA APP
 
