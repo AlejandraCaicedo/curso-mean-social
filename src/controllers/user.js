@@ -1,6 +1,6 @@
 'use strict';
 
-var bcrypt = require('bcrypt-nodejs');
+var bcrypt = require('bcrypt');
 var mongoosePaginate = require('mongoose-pagination');
 var fs = require('fs');
 var path = require('path');
@@ -18,150 +18,122 @@ function home(req, res) {
 	});
 }
 
-function saveUser(req, res) {
-	var params = req.body;
-	var user = new User();
+async function saveUser(req, res) {
+	const { name, surname, nick, email, password } = req.body;
 
-	if (
-		params.name &&
-		params.surname &&
-		params.nick &&
-		params.email &&
-		params.password
-	) {
-		user.name = params.name;
-		user.surname = params.surname;
-		user.nick = params.nick;
-		user.email = params.email;
-		user.role = 'ROLE_USER';
-		user.image = null;
+	if (name && surname && nick && email && password) {
+		try {
+			const existingUsers = await User.find({
+				$or: [{ email: email.toLowerCase() }, { nick: nick.toLowerCase() }],
+			});
 
-		// restricción de usuarios duplicados
-		User.find({
-			$or: [
-				{
-					email: user.email.toLowerCase(),
-				},
-				{
-					nick: user.nick.toLowerCase(),
-				},
-			],
-		}).exec((err, users) => {
-			if (err)
-				return res.status(500).send({
-					message: 'Error en la petición de usuarios',
-				});
-
-			if (users && users.length > 0) {
-				return res.status(200).send({
-					message: 'Ya existe un usuario registrado con esas clausulas',
+			if (existingUsers.length > 0) {
+				return res.status(400).json({
+					message: 'There is already a registered user with these credentials.',
 				});
 			}
 
-			// encriptación del password
-			bcrypt.hash(params.password, null, null, (err, hash) => {
-				user.password = hash;
-
-				user.save((err, userStored) => {
-					if (err)
-						return res.status(500).send({
-							message: 'Error al guardar al usuario',
-						});
-
-					if (userStored) {
-						res.status(200).send({
-							user: userStored,
-						});
-					} else {
-						res.status(404).send({
-							message: 'No se podido registrar el usuario',
-						});
-					}
-				});
+			const user = new User({
+				name,
+				surname,
+				nick,
+				email,
+				role: 'ROLE_USER',
+				image: null,
+				password: await bcrypt.hash(password, 10),
 			});
-		});
+
+			const userStored = await user.save();
+
+			if (userStored) {
+				res.status(201).json({ user: userStored });
+			} else {
+				res.status(400).json({ message: 'Could not register the user.' });
+			}
+		} catch (err) {
+			res
+				.status(500)
+				.json({ message: 'Error in the request.', error: err.message });
+		}
 	} else {
-		res.status(200).send({
-			message: 'Se deben llenar todos los campos necesarios',
+		res.status(400).json({ message: 'All necessary fields must be filled.' });
+	}
+}
+
+async function loginUser(req, res) {
+	const { email, password, getToken } = req.body;
+
+	try {
+		const user = await User.findOne({ email });
+
+		if (!user) {
+			return res.status(404).json({
+				message: 'No registered user with those credentials.',
+			});
+		}
+
+		const isMatch = await bcrypt.compare(password, user.password);
+
+		if (!isMatch) {
+			return res
+				.status(404)
+				.json({ message: 'The password entered is incorrect.' });
+		}
+
+		if (getToken) {
+			try {
+				// generar token
+				const token = jwt.createToken(user);
+				return res.status(200).json({ token });
+			} catch (tokenError) {
+				return res.status(500).json({
+					message: 'Error when authenticating user.',
+					error: tokenError.message,
+				});
+			}
+		} else {
+			// quitar contraseña del usuario
+			user.password = undefined;
+			return res.status(200).json({
+				user,
+			});
+		}
+	} catch (err) {
+		return res.status(500).json({
+			message: 'Error in the request.',
+			error: err.message,
 		});
 	}
 }
 
-function loginUser(req, res) {
-	var params = req.body;
-	var email = params.email;
-	var password = params.password;
-
-	User.findOne(
-		{
-			email: email,
-		},
-		(err, user) => {
-			if (err)
-				return res.status(500).send({
-					message: 'Error en la petición',
-				});
-
-			if (user) {
-				// password que esta en el form y user.password es la de DB
-				bcrypt.compare(password, user.password, (err, check) => {
-					if (check) {
-						if (params.getToken) {
-							//generar y devolver token
-
-							return res.status(200).send({
-								token: jwt.createToken(user),
-							});
-						} else {
-							//devolver datos de usuario
-
-							//quitar del json el password del usuario
-							user.password = undefined;
-
-							return res.status(200).send({
-								user,
-							});
-						}
-					} else {
-						return res.status(404).send({
-							message: 'El usuario no se ha podido identificar',
-						});
-					}
-				});
-			} else {
-				return res.status(404).send({
-					message: 'No existe un usuario registrado con esas clausulas',
-				});
-			}
-		},
-	);
-}
-
 // obtener datos de un usuario
-function getUser(req, res) {
-	// usuario de la url
-	var userID = req.params.id;
+async function getUser(req, res) {
+	try {
+		const userID = req.params.id;
 
-	User.findById(userID, (err, user) => {
-		if (err)
-			return res.status(500).send({
-				message: 'Error en la petición',
-			});
+		const user = await User.findById(userID);
 
-		if (!user)
-			return res.status(404).send({
-				message: 'El usuario no está registrado',
+		if (!user) {
+			return res.status(404).json({
+				message: 'The user is not registered.',
 			});
+		}
 
-		followThisUser(req.user.sub, userID).then((value) => {
-			user.password = undefined;
-			return res.status(200).send({
-				user,
-				following: value.following,
-				followed: value.followed,
-			});
+		const value = await followThisUser(req.user.sub, userID);
+
+		user.password = undefined;
+
+		return res.status(200).json({
+			user,
+			following: value.following,
+			followed: value.followed,
 		});
-	});
+	} catch (err) {
+		return res.status(500).json({
+			message: 'Error in the request.',
+			error: err.message,
+		});
+	}
 }
 
 // obtener listado de usuarios paginados
@@ -317,37 +289,26 @@ function getImageFile(req, res) {
 
 // asincrona para saber si un usuario sigue a otro
 async function followThisUser(identity_user_id, userID) {
-	// sincrona sigo a ese usuario
-	// el usuario identificado sigue al usuario que llega en la url
-	var following = await Follow.findOne({
-		user: identity_user_id,
-		followed: userID,
-	})
-		.exec()
-		.then((follow) => {
-			return follow;
-		})
-		.catch((err) => {
-			return handleError(err);
-		});
+	try {
+		// Buscar si el usuario identificado sigue al usuario especificado
+		const following = await Follow.findOne({
+			user: identity_user_id,
+			followed: userID,
+		}).exec();
 
-	// sincrona usuario seguido me sigue
-	var followed = await Follow.findOne({
-		user: userID,
-		followed: identity_user_id,
-	})
-		.exec()
-		.then((follow) => {
-			return follow;
-		})
-		.catch((err) => {
-			return handleError(err);
-		});
+		// Buscar si el usuario especificado sigue al usuario identificado
+		const followed = await Follow.findOne({
+			user: userID,
+			followed: identity_user_id,
+		}).exec();
 
-	return {
-		following: following,
-		followed: followed,
-	};
+		return {
+			following,
+			followed,
+		};
+	} catch (err) {
+		throw new Error('Error while getting user following.');
+	}
 }
 
 // asincrona para contar cuantos seguidos y seguidores tiene un usuario
