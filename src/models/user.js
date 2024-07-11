@@ -1,9 +1,9 @@
 'use strict';
 
-var mongoose = require('mongoose');
+const mongoose = require('mongoose');
+const mongoosePaginate = require('mongoose-paginate-v2');
 
-var Schema = mongoose.Schema;
-var UserSchema = Schema({
+const UserSchema = new mongoose.Schema({
 	name: String,
 	surname: String,
 	nick: String,
@@ -12,6 +12,8 @@ var UserSchema = Schema({
 	role: String,
 	image: String,
 });
+
+UserSchema.plugin(mongoosePaginate);
 
 // exportar el modelo de usuario(nombre del modelo, esquema)
 module.exports = mongoose.model('User', UserSchema);
