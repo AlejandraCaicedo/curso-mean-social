@@ -1,7 +1,6 @@
 'use strict';
 
 var bcrypt = require('bcrypt');
-var mongoosePaginate = require('mongoose-pagination');
 var fs = require('fs');
 var path = require('path');
 
@@ -137,99 +136,99 @@ async function getUser(req, res) {
 }
 
 // obtener listado de usuarios paginados
-function getUsers(req, res) {
-	//usuario identificado
-	var identity_user_id = req.user.sub;
-	var page = 1;
+async function getUsers(req, res) {
+	const identity_user_id = req.user.sub;
+	const page = req.params.page ? parseInt(req.params.page) : 1;
+	const itemPerPage = 5;
 
-	if (req.params.page) {
-		page = req.params.page;
-	}
+	try {
+		const options = {
+			page,
+			limit: itemPerPage,
+			sort: '_id',
+		};
 
-	// cantidad de usuarios por pagina
-	var itemPerPage = 5;
+		const users = await User.paginate({}, options);
 
-	User.find()
-		.sort('_id')
-		.paginate(page, itemPerPage, (err, users, total) => {
-			if (err)
-				return res.status(500).send({
-					message: 'Error en la petición',
-				});
-
-			if (!users)
-				return res.status(404).send({
-					message: 'No se encontraron usuarios disponibles',
-				});
-
-			followUsersIDs(identity_user_id).then((value) => {
-				// total (total de documentos encontrados)
-				return res.status(200).send({
-					users,
-					// usuarios que sigue
-					usersFollowing: value.following,
-					// usuarios que lo siguen
-					usersFollowed: value.followed,
-					total,
-					pages: Math.ceil(total / itemPerPage),
-				});
+		if (!users.docs.length) {
+			return res.status(404).json({
+				message: 'No users were found.',
 			});
+		}
+
+		const followInfo = await followUsersIDs(identity_user_id);
+
+		return res.status(200).json({
+			users: users.docs,
+			usersFollowing: followInfo.following,
+			usersFollowed: followInfo.followed,
+			total: users.totalDocs,
+			pages: users.totalPages,
 		});
+	} catch (err) {
+		return res.status(500).json({
+			message: 'Error in the request.',
+			error: err.message,
+		});
+	}
 }
 
 // actualizar datos de usuario
-function updateUser(req, res) {
-	var userID = req.params.id;
-	var update = req.body;
+async function updateUser(req, res) {
+	const userID = req.params.id;
+	const update = req.body;
 
-	// eliminar propiedad password del update
+	// Eliminar la propiedad password del objeto update
 	delete update.password;
 
 	if (userID !== req.user.sub) {
-		return res.status(500).send({
-			message: 'No existen permisos para actualizar los datos del usuario',
+		return res.status(403).json({
+			message: 'You do not have permissions to update user data.',
 		});
 	}
 
-	// new: true (devolver el objeto actualizado)
-
-	User.findByIdAndUpdate(
-		userID,
-		update,
-		{
+	try {
+		const userUpdated = await User.findByIdAndUpdate(userID, update, {
 			new: true,
-		},
-		(err, userUpdate) => {
-			if (err)
-				return res.status(500).send({
-					message: 'Error en la petición',
-				});
+		});
 
-			if (!userUpdate)
-				return res.status(404).send({
-					message: 'No se ha podido actualizar el usuario',
-				});
-
-			return res.status(200).send({
-				user: userUpdate,
+		if (!userUpdated) {
+			return res.status(404).json({
+				message: 'Could not update the user.',
 			});
-		},
-	);
+		}
+
+		return res.status(200).json({
+			user: userUpdated,
+		});
+	} catch (err) {
+		return res.status(500).json({
+			message: 'Error in the request.',
+			error: err.message,
+		});
+	}
 }
 
 // contadores de usuarios que sigo y me siguen
-function getCounters(req, res) {
-	// usuario que esta autenticado
-	var identity_user_id = req.user.sub;
+async function getCounters(req, res) {
+	try {
+		// Usuario autenticado
+		let identity_user_id = req.user.sub;
 
-	if (req.params.id) {
-		//usuario que llega como parametro
-		identity_user_id = req.params.id;
+		// Si se envía un ID de usuario en los parámetros
+		if (req.params.id) {
+			identity_user_id = req.params.id;
+		}
+
+		const counters = await getCountFollow(identity_user_id);
+
+		return res.status(200).json(counters);
+	} catch (err) {
+		return res.status(500).json({
+			message: 'Error in the request.',
+			error: err.message,
+		});
 	}
-
-	getCountFollow(identity_user_id).then((value) => {
-		return res.status(200).send(value);
-	});
 }
 
 // subir imagen avatar usuario
@@ -332,48 +331,26 @@ async function getCountFollow(userID) {
 
 // asincrona para saber si un usuario sigue a otro (usuarios paginados)
 async function followUsersIDs(userID) {
-	// array de usuarios que sigue el usuario autenticado
-	var following = await Follow.find({
-		user: userID,
-	})
-		.select({ _id: 0, __v: 0, user: 0 })
-		.exec()
-		.then((follows) => {
-			return follows;
-		})
-		.catch((err) => {
-			return handleError(err);
-		});
+	try {
+		// Obtener usuarios que sigue el usuario autenticado
+		const following = await Follow.find({ user: userID })
+			.select({ _id: 0, __v: 0, user: 0 })
+			.exec();
+		const followingClean = following.map((follow) => follow.followed);
 
-	// proceso followind IDs
-	var followingClean = [];
-	following.forEach((follow) => {
-		followingClean.push(follow.followed);
-	});
+		// Obtener usuarios que siguen al usuario autenticado
+		const followed = await Follow.find({ followed: userID })
+			.select({ _id: 0, __v: 0, followed: 0 })
+			.exec();
+		const followedClean = followed.map((follow) => follow.user);
 
-	// array de usuarios que siguen al usuario autenticado
-	var followed = await Follow.find({
-		followed: userID,
-	})
-		.select({ _id: 0, __v: 0, followed: 0 })
-		.exec()
-		.then((follows) => {
-			return follows;
-		})
-		.catch((err) => {
-			return handleError(err);
-		});
-
-	// proceso followed IDs
-	var followedClean = [];
-	followed.forEach((follow) => {
-		followedClean.push(follow.user);
-	});
-
-	return {
-		following: followingClean,
-		followed: followedClean,
-	};
+		return {
+			following: followingClean,
+			followed: followedClean,
+		};
+	} catch (err) {
+		throw new Error('Error while getting following IDs');
+	}
 }
 
 module.exports = {

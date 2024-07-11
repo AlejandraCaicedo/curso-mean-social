@@ -3,7 +3,6 @@
 var path = require('path');
 var fs = require('fs');
 var moment = require('moment');
-var mongoosePaginate = require('mongoose-pagination');
 const { publicDecrypt } = require('crypto');
 
 const Publication = require('../models/publication');
