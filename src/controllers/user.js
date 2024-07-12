@@ -1,8 +1,8 @@
 'use strict';
 
-var bcrypt = require('bcrypt');
-var fs = require('fs');
-var path = require('path');
+const bcrypt = require('bcrypt');
+const fs = require('fs');
+const path = require('path');
 
 const User = require('../models/user');
 const Follow = require('../models/follow');

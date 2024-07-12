@@ -1,7 +1,7 @@
 'use strict';
 
-var User = require('../models/user');
-var Follow = require('../models/follow');
+const User = require('../models/user');
+const Follow = require('../models/follow');
 
 async function saveFollow(req, res) {
 	try {
