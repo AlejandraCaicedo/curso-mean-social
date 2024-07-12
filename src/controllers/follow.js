@@ -3,169 +3,146 @@
 var User = require('../models/user');
 var Follow = require('../models/follow');
 
-function saveFollow(req, res) {
-	var params = req.body;
-	var follow = new Follow();
-
-	follow.user = req.user.sub;
-	follow.followed = params.followed;
-
-	follow.save((err, followStored) => {
-		if (err)
-			return res.status(500).send({
-				message: 'Error al guardar el seguimiento',
-			});
-
-		if (!followStored)
-			return res.status(404).send({
-				message: 'El seguimiento no se ha guardado',
-			});
-
-		return res.status(200).send({
-			follow: followStored,
+async function saveFollow(req, res) {
+	try {
+		const params = req.body;
+		const follow = new Follow({
+			user: req.user.sub,
+			followed: params.followed,
 		});
-	});
+
+		const followStored = await follow.save();
+
+		if (!followStored) {
+			return res.status(404).json({ message: 'The follow has not been saved' });
+		}
+
+		return res.status(200).json({ follow: followStored });
+	} catch (err) {
+		return res
+			.status(500)
+			.json({ message: 'Error in the request.', error: err.message });
+	}
 }
 
-function deleteFollow(req, res) {
-	var userID = req.user.sub; // el que esta logeado
-	var followID = req.params.id; // el usuario que se deja de seguir
+async function deleteFollow(req, res) {
+	try {
+		const userID = req.user.sub; // Usuario logeado
+		const followID = req.params.id; // Usuario a dejar de seguir
 
-	Follow.findOneAndDelete(
-		{
+		const result = await Follow.findOneAndDelete({
 			user: userID,
 			followed: followID,
-		},
-		(err) => {
-			if (err)
-				return res.status(500).send({
-					message: 'Error al dejar de seguir',
-				});
+		});
 
-			return res.status(200).send({
-				message: 'El follow se ha eliminado',
-			});
-		},
-	);
+		if (!result) {
+			return res.status(404).json({ message: 'No follow to remove found.' });
+		}
+
+		return res
+			.status(200)
+			.json({ message: 'The follow has been successfully removed.' });
+	} catch (err) {
+		return res
+			.status(500)
+			.json({ message: 'Error in the request.', error: err.message });
+	}
 }
 
 // Listar usuarios que yo sigo
-function getFollowingUsers(req, res) {
-	var userID = req.user.sub;
+async function getFollowingUsers(req, res) {
+	try {
+		const { id, page } = req.params;
+		const userID = id || req.user.sub;
+		const currentPage = parseInt(page) || parseInt(id) || 1;
+		const itemsPerPage = 4;
 
-	if (req.params.id && req.params.page) {
-		userID = req.params.id;
-	}
+		const options = {
+			populate: { path: 'followed' },
+			page: currentPage,
+			limit: itemsPerPage,
+		};
 
-	var page = 1;
+		const result = await Follow.paginate({ user: userID }, options);
 
-	if (req.params.page) {
-		page = req.params.page;
-	} else {
-		page = req.params.id;
-	}
+		if (!result.docs.length) {
+			return res.status(401).json({ message: 'There are no users followed.' });
+		}
 
-	// cantidad de follows por pagina
-	var itemsPerPage = 4;
-
-	Follow.find({
-		user: userID,
-	})
-		.populate({
-			path: 'followed',
-		})
-		.paginate(page, itemsPerPage, (err, follows, total) => {
-			if (err)
-				return res.status(500).send({
-					message: 'Error en el servidor',
-				});
-
-			if (!follows)
-				return res.status(401).send({
-					message: 'No hay usuarios seguidos',
-				});
-
-			return res.status(200).send({
-				total: total, // total de registros que trae el find
-				pages: Math.ceil(total / itemsPerPage),
-				follows,
-			});
+		return res.status(200).json({
+			follows: result.docs,
+			total: result.totalDocs,
+			pages: result.totalPages,
 		});
+	} catch (err) {
+		return res.status(500).json({
+			message: 'Error in the request.',
+			error: err.message,
+		});
+	}
 }
 
 // Listar usuarios que me siguen
-function getFollowedUsers(req, res) {
-	var userID = req.user.sub;
+async function getFollowedUsers(req, res) {
+	try {
+		const { id, page } = req.params;
+		const userID = id || req.user.sub;
+		const currentPage = parseInt(page) || parseInt(id) || 1;
+		const itemsPerPage = 4;
 
-	if (req.params.id && req.params.page) {
-		userID = req.params.id;
-	}
+		const options = {
+			populate: 'user',
+			page: currentPage,
+			limit: itemsPerPage,
+		};
 
-	var page = 1;
+		const result = await Follow.paginate({ followed: userID }, options);
 
-	if (req.params.page) {
-		page = req.params.page;
-	} else {
-		page = req.params.id;
-	}
+		if (!result.docs.length) {
+			return res
+				.status(401)
+				.json({ message: 'There are no followers for this user.' });
+		}
 
-	// cantidad de follows por pagina
-	var itemsPerPage = 4;
-
-	Follow.find({
-		followed: userID,
-	})
-		.populate('user')
-		.paginate(page, itemsPerPage, (err, follows, total) => {
-			if (err)
-				return res.status(500).send({
-					message: 'Error en el servidor',
-				});
-
-			if (!follows)
-				return res.status(401).send({
-					message: 'No hay usuarios seguidores',
-				});
-
-			return res.status(200).send({
-				total: total, // total de registros que trae el find
-				pages: Math.ceil(total / itemsPerPage),
-				follows,
-			});
+		return res.status(200).json({
+			total: result.totalDocs,
+			pages: result.totalPages,
+			follows: result.docs,
 		});
+	} catch (err) {
+		return res.status(500).json({
+			message: 'Error in the request.',
+			error: err.message,
+		});
+	}
 }
 
 // devolver usuarios que me siguen sin paginación
-function getFollows(req, res) {
-	var userID = req.user.sub;
+async function getFollows(req, res) {
+	try {
+		const userID = req.user.sub;
+		let findQuery;
 
-	// sacar los usuarios que sigo
-	var find = Follow.find({
-		user: userID,
-	});
+		if (req.params.followed) {
+			findQuery = Follow.find({ followed: userID });
+		} else {
+			findQuery = Follow.find({ user: userID });
+		}
 
-	// sacar los usuarios que me siguen
-	if (req.params.followed) {
-		find = Follow.find({
-			followed: userID,
-		});
+		const follows = await findQuery.populate('user followed').exec();
+
+		if (!follows || follows.length === 0) {
+			return res
+				.status(401)
+				.json({ message: 'There are no follow for this user.' });
+		}
+
+		return res.status(200).json({ follows });
+	} catch (err) {
+		return res
+			.status(500)
+			.json({ message: 'Error in the request.', error: err.message });
 	}
-
-	find.populate('user followed').exec((err, follows) => {
-		if (err)
-			return res.status(500).send({
-				message: 'Error en el servidor',
-			});
-
-		if (!follows)
-			return res.status(401).send({
-				message: 'No hay usuarios registrados',
-			});
-
-		return res.status(200).send({
-			follows,
-		});
-	});
 }
 
 module.exports = {
