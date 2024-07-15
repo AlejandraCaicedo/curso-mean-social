@@ -144,12 +144,12 @@ async function deletePublication(req, res) {
 	}
 }
 
-function uploadPublicationImage(req, res) {
+async function uploadPublicationImage(req, res) {
 	const publicationID = req.params.id;
-	const user = req.user.sub;
+	const userID = req.user.sub;
 
 	if (!req.files || !req.files.image) {
-		return res.status(400).send({ message: 'No file was uploaded.' });
+		return res.status(400).json({ message: 'No file was uploaded.' });
 	}
 
 	const { path: filePath } = req.files.image;
@@ -161,12 +161,11 @@ function uploadPublicationImage(req, res) {
 		return removeFilesOfUploads(res, filePath, 'Invalid extension.');
 	}
 
-	Publication.findOne({ user, _id: publicationID }, (err, publication) => {
-		if (err) {
-			return res
-				.status(500)
-				.send({ message: 'Error while uploading the file.' });
-		}
+	try {
+		const publication = await Publication.findOne({
+			user: userID,
+			_id: publicationID,
+		});
 
 		if (!publication) {
 			return removeFilesOfUploads(
@@ -176,26 +175,22 @@ function uploadPublicationImage(req, res) {
 			);
 		}
 
-		// Actualizar publicación en la base de datos
-		Publication.findByIdAndUpdate(
+		const publicationUpdated = await Publication.findByIdAndUpdate(
 			publicationID,
 			{ file: fileName },
 			{ new: true },
-			(err, publicationUpdated) => {
-				if (err) {
-					return res.status(500).send({ message: 'Error in the request.' });
-				}
-
-				if (!publicationUpdated) {
-					return res
-						.status(404)
-						.send({ message: 'Could not upload the image.' });
-				}
-
-				return res.status(200).send({ publication: publicationUpdated });
-			},
 		);
-	});
+
+		if (!publicationUpdated) {
+			return res.status(404).json({ message: 'Could not upload the image.' });
+		}
+
+		return res.status(200).json({ publication: publicationUpdated });
+	} catch (err) {
+		return res
+			.status(500)
+			.json({ message: 'Error while uploading the file.', error: err.message });
+	}
 }
 
 function getImageFile(req, res) {

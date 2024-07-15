@@ -232,11 +232,11 @@ async function getCounters(req, res) {
 }
 
 // subir imagen avatar usuario
-function uploadImage(req, res) {
+async function uploadImage(req, res) {
 	const userID = req.params.id;
 
 	if (!req.files || !req.files.image) {
-		return res.status(400).send({ message: 'No file was uploaded.' });
+		return res.status(400).json({ message: 'No file was uploaded.' });
 	}
 
 	const { path: filePath } = req.files.image;
@@ -252,23 +252,24 @@ function uploadImage(req, res) {
 		return removeFilesOfUploads(res, filePath, 'Invalid extension.');
 	}
 
-	// Actualizar usuario en la base de datos
-	User.findByIdAndUpdate(
-		userID,
-		{ image: fileName },
-		{ new: true },
-		(err, userUpdated) => {
-			if (err) {
-				return res.status(500).send({ message: 'Error in the request.' });
-			}
+	try {
+		const userUpdated = await User.findByIdAndUpdate(
+			userID,
+			{ image: fileName },
+			{ new: true },
+		);
 
-			if (!userUpdated) {
-				return res.status(404).send({ message: 'Could not upload the image.' });
-			}
+		if (!userUpdated) {
+			return res.status(404).json({ message: 'Could not upload the image.' });
+		}
 
-			return res.status(200).send({ user: userUpdated });
-		},
-	);
+		return res.status(200).json({ user: userUpdated });
+	} catch (err) {
+		return res.status(500).json({
+			message: 'Error while uploading the image.',
+			error: err.message,
+		});
+	}
 }
 
 function getImageFile(req, res) {
