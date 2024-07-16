@@ -1,45 +1,44 @@
 'use strict';
 
-var path = require('path');
-var fs = require('fs');
-var moment = require('moment');
-const { publicDecrypt } = require('crypto');
+const path = require('path');
+const fs = require('fs');
+const moment = require('moment');
 
 const Publication = require('../models/publication');
 const User = require('../models/user');
 const Follow = require('../models/follow');
 
 const { removeFilesOfUploads } = require('../services/imageUploadService');
-const publication = require('../models/publication');
 
-function savePublication(req, res) {
-	let params = req.body;
+async function savePublication(req, res) {
+	const params = req.body;
 
 	if (!params.text) {
-		return res.status(200).send({ message: 'You must send a text' });
+		return res.status(400).json({ message: 'You must send a text' });
 	}
 
-	let publication = new Publication();
-	publication.text = params.text;
-	publication.file = null;
-	publication.user = req.user.sub;
-	publication.created_at = moment().unix();
-
-	publication.save((err, publicationStored) => {
-		if (err)
-			return res.status(500).send({
-				message: 'Error saving the publication.',
-			});
-
-		if (!publicationStored)
-			return res.status(404).send({
-				message: 'The publication has not been saved.',
-			});
-
-		return res.status(200).send({
-			publication: publicationStored,
-		});
+	const publication = new Publication({
+		text: params.text,
+		file: null,
+		user: req.user.sub,
+		created_at: moment().unix(),
 	});
+
+	try {
+		const publicationStored = await publication.save();
+
+		if (!publicationStored) {
+			return res
+				.status(404)
+				.json({ message: 'The publication has not been saved.' });
+		}
+
+		return res.status(200).json({ publication: publicationStored });
+	} catch (err) {
+		return res
+			.status(500)
+			.json({ message: 'Error saving the publication.', error: err.message });
+	}
 }
 
 /**
@@ -47,76 +46,73 @@ function savePublication(req, res) {
  * @param {*} req
  * @param {*} res
  */
-function getPublications(req, res) {
-	let page = 1;
+async function getPublications(req, res) {
+	let page = req.params.page ? parseInt(req.params.page) : 1;
 	let userId = req.user.sub;
-
-	if (req.params.page) {
-		page = req.params.page;
-	}
-
 	let itemsPerPage = 4;
 
-	Follow.find({ user: userId })
-		.populate({ path: 'followed' })
-		.exec((err, follows) => {
-			if (err)
-				return res.status(500).send({
-					message: 'Error getting followed.',
-				});
+	try {
+		// Obtener los usuarios que el usuario actual sigue
+		let follows = await Follow.find({ user: userId })
+			.populate('followed')
+			.exec();
 
-			let followsClean = [];
+		// Extraer los IDs de los usuarios seguidos
+		let followsClean = follows.map((follow) => follow.followed._id);
 
-			follows.forEach((follow) => {
-				followsClean.push(follow.followed);
-			});
+		// Obtener las publicaciones de los usuarios seguidos
+		let options = {
+			page: page,
+			limit: itemsPerPage,
+			sort: '-created_at',
+			populate: 'user',
+		};
 
-			Publication.find({ user: { $in: followsClean } })
-				.sort('-created_at')
-				.populate('user')
-				.paginate(page, itemsPerPage, (err, publications, total) => {
-					if (err)
-						return res.status(500).send({
-							message: 'Error returning publications.',
-						});
+		let result = await Publication.paginate(
+			{ user: { $in: followsClean } },
+			options,
+		);
 
-					if (!publications)
-						return res.status(404).send({
-							message: 'There are no publications.',
-						});
+		if (!result.docs.length) {
+			return res.status(404).json({ message: 'There are no publications.' });
+		}
 
-					return res.status(200).send({
-						total_items: total,
-						page,
-						pages: Math.ceil(total / itemsPerPage),
-						publications,
-					});
-				});
+		return res.status(200).json({
+			total_items: result.totalDocs,
+			page: result.page,
+			pages: result.totalPages,
+			publications: result.docs,
 		});
+	} catch (err) {
+		return res
+			.status(500)
+			.json({ message: 'Error getting publications.', error: err.message });
+	}
 }
+
 /**
  * Returning a publication giving the ID
  * @param {*} req
  * @param {*} res
  */
-function getPublication(req, res) {
-	const publication = req.params.id;
+async function getPublication(req, res) {
+	const publicationId = req.params.id;
 
-	Publication.findById(publication, (err, publication) => {
-		if (err)
-			return res.status(500).send({
-				message: 'Error returning publication.',
-			});
+	try {
+		const publication = await Publication.findById(publicationId);
 
-		if (!publication)
-			return res.status(404).send({
-				message: 'The publication does not exist.',
-			});
+		if (!publication) {
+			return res
+				.status(404)
+				.json({ message: 'The publication does not exist.' });
+		}
 
-		return res.status(200).send({
-			publication,
-		});
-	});
+		return res.status(200).json({ publication });
+	} catch (err) {
+		return res
+			.status(500)
+			.json({ message: 'Error returning publication.', error: err.message });
+	}
 }
 
 /**
@@ -124,36 +120,36 @@ function getPublication(req, res) {
  * @param {*} req
  * @param {*} res
  */
-function deletePublication(req, res) {
-	const publication = req.params.id;
-	const user = req.user.sub;
+async function deletePublication(req, res) {
+	const publicationId = req.params.id;
+	const userId = req.user.sub;
 
-	Publication.findOneAndRemove(
-		{ user: user, _id: publication },
-		(err, publicationRemoved) => {
-			if (err)
-				return res.status(500).send({
-					message: 'Error deleting publication.',
-				});
+	try {
+		const publicationRemoved = await Publication.findOneAndRemove({
+			user: userId,
+			_id: publicationId,
+		});
 
-			if (!publicationRemoved)
-				return res.status(404).send({
-					message: 'The publication could not be deleted.',
-				});
+		if (!publicationRemoved) {
+			return res
+				.status(404)
+				.json({ message: 'The publication could not be deleted.' });
+		}
 
-			return res.status(200).send({
-				publication: publicationRemoved,
-			});
-		},
-	);
+		return res.status(200).json({ publication: publicationRemoved });
+	} catch (err) {
+		return res
+			.status(500)
+			.json({ message: 'Error deleting publication.', error: err.message });
+	}
 }
 
-function uploadPublicationImage(req, res) {
+async function uploadPublicationImage(req, res) {
 	const publicationID = req.params.id;
-	const user = req.user.sub;
+	const userID = req.user.sub;
 
 	if (!req.files || !req.files.image) {
-		return res.status(400).send({ message: 'No file was uploaded.' });
+		return res.status(400).json({ message: 'No file was uploaded.' });
 	}
 
 	const { path: filePath } = req.files.image;
@@ -165,12 +161,11 @@ function uploadPublicationImage(req, res) {
 		return removeFilesOfUploads(res, filePath, 'Invalid extension.');
 	}
 
-	Publication.findOne({ user, _id: publicationID }, (err, publication) => {
-		if (err) {
-			return res
-				.status(500)
-				.send({ message: 'Error while uploading the file.' });
-		}
+	try {
+		const publication = await Publication.findOne({
+			user: userID,
+			_id: publicationID,
+		});
 
 		if (!publication) {
 			return removeFilesOfUploads(
@@ -180,26 +175,22 @@ function uploadPublicationImage(req, res) {
 			);
 		}
 
-		// Actualizar publicación en la base de datos
-		Publication.findByIdAndUpdate(
+		const publicationUpdated = await Publication.findByIdAndUpdate(
 			publicationID,
 			{ file: fileName },
 			{ new: true },
-			(err, publicationUpdated) => {
-				if (err) {
-					return res.status(500).send({ message: 'Error in the request.' });
-				}
-
-				if (!publicationUpdated) {
-					return res
-						.status(404)
-						.send({ message: 'Could not upload the image.' });
-				}
-
-				return res.status(200).send({ publication: publicationUpdated });
-			},
 		);
-	});
+
+		if (!publicationUpdated) {
+			return res.status(404).json({ message: 'Could not upload the image.' });
+		}
+
+		return res.status(200).json({ publication: publicationUpdated });
+	} catch (err) {
+		return res
+			.status(500)
+			.json({ message: 'Error while uploading the file.', error: err.message });
+	}
 }
 
 function getImageFile(req, res) {
