@@ -9,7 +9,10 @@ const Follow = require('../models/follow');
 const Publication = require('../models/publication');
 
 const jwt = require('../services/jwt');
-const { removeFilesOfUploads } = require('../services/imageUploadService');
+const {
+	removeFilesOfUploads,
+	uploadImage,
+} = require('../services/imageUploadService');
 
 function home(req, res) {
 	res.status(200).send({
@@ -232,44 +235,9 @@ async function getCounters(req, res) {
 }
 
 // subir imagen avatar usuario
-async function uploadImage(req, res) {
+async function uploadImageUser(req, res) {
 	const userID = req.params.id;
-
-	if (!req.files || !req.files.image) {
-		return res.status(400).json({ message: 'No file was uploaded.' });
-	}
-
-	const { path: filePath } = req.files.image;
-	const fileName = path.basename(filePath);
-	const fileExt = path.extname(fileName).slice(1).toLowerCase();
-
-	if (userID !== req.user.sub) {
-		return removeFilesOfUploads(res, filePath, 'No permission to update data.');
-	}
-
-	const validExtensions = ['png', 'jpg', 'jpeg', 'gif'];
-	if (!validExtensions.includes(fileExt)) {
-		return removeFilesOfUploads(res, filePath, 'Invalid extension.');
-	}
-
-	try {
-		const userUpdated = await User.findByIdAndUpdate(
-			userID,
-			{ image: fileName },
-			{ new: true },
-		);
-
-		if (!userUpdated) {
-			return res.status(404).json({ message: 'Could not upload the image.' });
-		}
-
-		return res.status(200).json({ user: userUpdated });
-	} catch (err) {
-		return res.status(500).json({
-			message: 'Error while uploading the image.',
-			error: err.message,
-		});
-	}
+	return uploadImage(req, res, 'user', userID, req.user.sub);
 }
 
 function getImageFile(req, res) {
@@ -362,6 +330,6 @@ module.exports = {
 	getUsers,
 	updateUser,
 	getCounters,
-	uploadImage,
+	uploadImageUser,
 	getImageFile,
 };

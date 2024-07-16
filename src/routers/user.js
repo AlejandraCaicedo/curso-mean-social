@@ -7,9 +7,7 @@ var api = express.Router();
 var md_auth = require('../middlewares/authenticated');
 
 var multipart = require('connect-multiparty');
-var md_upload = multipart({
-	uploadDir: './uploads/users',
-});
+var md_upload = multipart({ uploadDit: './uploads/users' });
 
 api.get('/home', UserController.home);
 api.post('/register', UserController.saveUser);
@@ -21,7 +19,7 @@ api.put('/update-user/:id', md_auth.ensureAuth, UserController.updateUser);
 api.post(
 	'/upload-image-user/:id',
 	[md_auth.ensureAuth, md_upload],
-	UserController.uploadImage,
+	UserController.uploadImageUser,
 );
 api.get(
 	'/get-image-user/:imageFile',
