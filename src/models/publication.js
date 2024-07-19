@@ -2,12 +2,13 @@
 
 const mongoose = require('mongoose');
 const mongoosePaginate = require('mongoose-paginate-v2');
+const Schema = mongoose.Schema;
 
 const PublicationSchema = new mongoose.Schema({
 	text: String,
 	file: String,
 	created_at: String,
-	user: { type: Schema.ObjectId, ref: 'User' },
+	user: { type: Schema.Types.ObjectId, ref: 'User' },
 });
 
 PublicationSchema.plugin(mongoosePaginate);

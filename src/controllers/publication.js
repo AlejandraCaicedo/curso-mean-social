@@ -8,7 +8,10 @@ const Publication = require('../models/publication');
 const User = require('../models/user');
 const Follow = require('../models/follow');
 
-const { removeFilesOfUploads } = require('../services/imageUploadService');
+const {
+	removeFilesOfUploads,
+	uploadImage,
+} = require('../services/imageUploadService');
 
 async function savePublication(req, res) {
 	const params = req.body;
@@ -147,50 +150,7 @@ async function deletePublication(req, res) {
 async function uploadPublicationImage(req, res) {
 	const publicationID = req.params.id;
 	const userID = req.user.sub;
-
-	if (!req.files || !req.files.image) {
-		return res.status(400).json({ message: 'No file was uploaded.' });
-	}
-
-	const { path: filePath } = req.files.image;
-	const fileName = path.basename(filePath);
-	const fileExt = path.extname(fileName).slice(1).toLowerCase();
-
-	const validExtensions = ['png', 'jpg', 'jpeg', 'gif'];
-	if (!validExtensions.includes(fileExt)) {
-		return removeFilesOfUploads(res, filePath, 'Invalid extension.');
-	}
-
-	try {
-		const publication = await Publication.findOne({
-			user: userID,
-			_id: publicationID,
-		});
-
-		if (!publication) {
-			return removeFilesOfUploads(
-				res,
-				filePath,
-				'No permission to update data.',
-			);
-		}
-
-		const publicationUpdated = await Publication.findByIdAndUpdate(
-			publicationID,
-			{ file: fileName },
-			{ new: true },
-		);
-
-		if (!publicationUpdated) {
-			return res.status(404).json({ message: 'Could not upload the image.' });
-		}
-
-		return res.status(200).json({ publication: publicationUpdated });
-	} catch (err) {
-		return res
-			.status(500)
-			.json({ message: 'Error while uploading the file.', error: err.message });
-	}
+	return uploadImage(req, res, 'publication', publicationID, userID);
 }
 
 function getImageFile(req, res) {
