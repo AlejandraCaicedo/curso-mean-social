@@ -1,15 +1,15 @@
 'use strict';
 
-var express = require('express');
-var bodyParser = require('body-parser');
+const express = require('express');
+const bodyParser = require('body-parser');
 
-var app = express();
+const app = express();
 
 // CARGAR RUTAS
 
-var user_routes = require('./routers/user');
-var follow_routes = require('./routers/follow');
-var publication_routes = require('./routers/publication');
+const user_routes = require('./routers/user');
+const follow_routes = require('./routers/follow');
+const publication_routes = require('./routers/publication');
 
 // CARGAR MIDDLEWARES
 
