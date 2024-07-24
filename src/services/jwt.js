@@ -1,8 +1,8 @@
 'use strict';
 
-var jwt = require('jwt-simple');
-var moment = require('moment');
-var secret = 'clave_secreta';
+const jwt = require('jwt-simple');
+const moment = require('moment');
+const secret = 'clave_secreta';
 
 exports.createToken = function (user) {
 	var payload = {

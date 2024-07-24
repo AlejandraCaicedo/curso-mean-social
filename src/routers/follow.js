@@ -1,10 +1,10 @@
 'use strict';
 
-var express = require('express');
-var FollowController = require('../controllers/follow');
+const express = require('express');
+const FollowController = require('../controllers/follow');
 
-var api = express.Router();
-var md_auth = require('../middlewares/authenticated');
+const api = express.Router();
+const md_auth = require('../middlewares/authenticated');
 
 api.post('/follow', md_auth.ensureAuth, FollowController.saveFollow);
 
